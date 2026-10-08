@@ -48,10 +48,33 @@ function rememberParty(v) { try { if (v) sessionStorage.setItem(LAST_KEY, JSON.s
 // this tab verified the party's on-chain entry under its original code (REJOIN checks against it)
 export function rememberVerified(code) { const lp = lastParty(); if (lp) rememberParty({ ...lp, verified: code }); }
 
-function peerOpts() {
+const STUN = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }];
+let iceCache = null;   // { servers, until }
+
+// Relay (TURN) credentials from the site's own /api/turn (a Vercel function holding the Cloudflare key).
+// WebRTC still tries direct connections first and only relays when players cannot reach each other.
+// Without the endpoint (local dev, other hosts, not configured) the game uses direct connections only.
+async function iceServers() {
+  if (iceCache && Date.now() < iceCache.until) return iceCache.servers;
+  try {
+    const r = await fetch('/api/turn', { cache: 'no-store', signal: AbortSignal.timeout(4000) });
+    if (r.ok && (r.headers.get('content-type') || '').includes('application/json')) {
+      const j = await r.json();
+      if (Array.isArray(j.iceServers) && j.iceServers.length) {
+        const ttl = Number(j.ttl) || 3600;
+        iceCache = { servers: [...j.iceServers, ...STUN], until: Date.now() + Math.max(60, ttl - 1800) * 1000 };   // refresh well before expiry
+        return iceCache.servers;
+      }
+    }
+  } catch { /* no relay available: direct connections only */ }
+  iceCache = { servers: STUN, until: Date.now() + 60 * 1000 };   // look for the relay again in a minute
+  return STUN;
+}
+
+async function peerOpts() {
   // optional own signalling server: ?peerhost=host:port (e.g. a local "peerjs --port 9000")
   const q = new URLSearchParams(location.search).get('peerhost');
-  const base = { debug: 1, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } };
+  const base = { debug: 1, config: { iceServers: await iceServers() } };
   if (!q) return base;
   const [host, port] = q.split(':');
   return { ...base, host, port: Number(port || 9000), path: '/', secure: location.protocol === 'https:' };
@@ -115,9 +138,10 @@ export class Net {
   on(type, fn) { (this.handlers[type] ||= []).push(fn); }
   emit(type, ...a) { for (const f of this.handlers[type] || []) { try { f(...a); } catch (e) { console.error('[net]', type, e); } } }
 
-  _open(id) {
+  async _open(id) {
+    const opts = await peerOpts();
     return new Promise((resolve, reject) => {
-      const p = new Peer(id, peerOpts());
+      const p = new Peer(id, opts);
       const t = setTimeout(() => { try { p.destroy(); } catch { /* ignore */ } reject(err('Could not reach the matchmaking server. Check your connection.', 'network')); }, 12000);
       p.on('open', () => { clearTimeout(t); resolve(p); });
       p.on('error', e => { clearTimeout(t); try { p.destroy(); } catch { /* ignore */ } reject(e); });
