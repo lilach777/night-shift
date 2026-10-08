@@ -19,6 +19,11 @@ node tools/smoke-test.mjs http://localhost:4173/   # checks every asset is serve
 
 Deploy: upload the contents of `dist/` to any static host (itch.io HTML5 zip, GitHub Pages,
 Netlify, S3/CloudFront, nginx). The build uses relative paths, so it also works from a sub-folder.
+
+On **Vercel**, `api/turn.js` additionally provides a multiplayer relay for players whose networks block
+direct connections. Set two server-side environment variables in the Vercel project (never `VITE_*`, never in
+the repository): `CLOUDFLARE_TURN_KEY_ID` and `CLOUDFLARE_TURN_API_TOKEN` (Cloudflare dashboard > Realtime >
+TURN Server). Without them, or on other hosts, multiplayer simply uses direct connections only.
 Serve `.ogg` as `audio/ogg` and `.glb` as `model/gltf-binary` (most hosts do this by default).
 
 Supported: desktop Chrome, Edge and Firefox with WebGL 2 and hardware acceleration.
@@ -90,52 +95,58 @@ teleports, fuse markers, spawn any Koala encounter, trigger any horror event, bl
 power, phone call, morgue sequence, final sequence, god mode. `?seed=123` fixes the fuse layout.
 None of this code ships in `npm run build`.
 
-## Wallet & entry fee (Hemi Testnet)
+## Wallet & Safety
 
-Every player connects an EVM wallet (installed extensions via EIP-6963, Coinbase Wallet, and WalletConnect when
-`VITE_WALLETCONNECT_PROJECT_ID` is set) and must be on **Hemi Testnet (chain 743111)**.
+NIGHT SHIFT uses an EVM wallet on **Hemi Testnet only** (chain ID 743111). Testnet ETH has no real-world value.
+Supported: browser extensions such as MetaMask, Rabby, Trust Wallet and Coinbase Wallet (plus any other
+EIP-6963 wallet), and WalletConnect mobile wallets when the build has a WalletConnect project ID.
 
-| Action | Wallet + Hemi | Entry fee |
+| Action | Wallet on Hemi Testnet | Cost |
 |---|---|---|
-| Single player NEW GAME | required | paid (real transaction) |
-| Single player CONTINUE | required | none |
-| Multiplayer CREATE PARTY | required | paid once, by the creator |
-| Multiplayer JOIN PARTY | required | none |
+| Single player NEW GAME | required | one small testnet ETH transaction (0.001 ETH + gas) |
+| Single player CONTINUE | required | free, no transaction |
+| Multiplayer CREATE PARTY | required | the creator pays once (0.001 ETH + gas) for the whole party |
+| Multiplayer JOIN PARTY | required | free, no transaction |
 
-Configuration lives in one place: `src/web3/chain.js` (chain, RPC, explorer) and `src/web3/deployments.json`
-(the deployed contract, written by the deploy script). The fee is set at deployment (`ENTRY_FEE_ETH`) and read
-from the contract by the game.
+- **The game will never ask for your seed phrase, recovery phrase or private key.** Anyone who does is not us.
+- Your wallet is only ever asked to: connect, switch to (or add) Hemi Testnet, and confirm the entry transaction
+  above. The game does **not** request token approvals, NFT permissions, or message signatures.
+- An entry that was paid but not used (for example, the lobby closed before the night started) is reused for up
+  to 12 hours rather than charged again.
+- Use a testnet-only wallet. Get Hemi Testnet ETH from the official Hemi faucet.
 
-Deploying the contract (`contracts/`, Hardhat + OpenZeppelin):
+**Network details**
 
-1. `cd contracts && npm install`
-2. Copy `.env.example` to `.env` and put a **throwaway testnet** key in `DEPLOYER_PRIVATE_KEY` (never commit it).
-3. Fund that address with Hemi Testnet ETH from the Hemi faucet.
-4. `npm test` then `npm run deploy:hemi` (writes the address into `src/web3/deployments.json`), then `npm run smoke:hemi`.
-5. Any time later: `npx hardhat run scripts/verify-deploy.js --network hemiTestnet` checks the deployed contract
-   (bytecode, fee, ownership state) from its address alone.
+| | |
+|---|---|
+| Network | Hemi Testnet (Hemi Sepolia), chain ID 743111, currency ETH |
+| RPC | `https://testnet.rpc.hemi.network/rpc` |
+| Explorer | https://testnet.explorer.hemi.xyz |
+| Entry contract | [`0x44BB53fcFD7a99c360A8b6a74DAdAd1879b1FA95`](https://testnet.explorer.hemi.xyz/address/0x44BB53fcFD7a99c360A8b6a74DAdAd1879b1FA95) (`NightShiftEntry`, source in [`contracts/`](contracts/)) |
 
-The game itself needs no `.env`. Optional build-time variables: `VITE_HEMI_RPC_URL` (another Hemi RPC) and
-`VITE_WALLETCONNECT_PROJECT_ID` (enables WalletConnect / mobile wallets). Both are public values, not secrets.
-
-Local testing without spending anything: `LOCAL_CHAIN_ID=743111 npx hardhat node`, `npm run deploy:local`,
-then open the game with `?devwallet=1` (development builds only).
+The game reads the fee from the contract and keeps all chain settings in `src/web3/chain.js` and
+`src/web3/deployments.json`. It needs no `.env`; two optional, public build-time variables exist:
+`VITE_HEMI_RPC_URL` (another Hemi RPC) and `VITE_WALLETCONNECT_PROJECT_ID` (enables WalletConnect).
+Contract development and deployment are documented in [`contracts/README.md`](contracts/README.md).
 
 ## Privacy
 
-- **Wallets stay on your device.** The game never sends your wallet address to other players, the signalling
-  server, or any server of its own; there is no player database, leaderboard, analytics or telemetry. Each player
-  sees only their own (shortened) address. Console errors from the wallet are redacted.
-- **How joiners know the party was paid for.** The creator's entry is recorded on-chain under a one-way
-  commitment, `keccak256("nightshift.party.v1", partyCode, secret)`. Joiners receive only the party code, the
-  secret and a block number, recompute the commitment and look it up on Hemi with a free read. No address or
-  transaction hash is sent. Note that blockchain transactions are public by nature: someone who knows the
-  commitment could look up the paying transaction on a block explorer, so the creator should use a testnet-only
-  wallet.
-- **Peer-to-peer networking.** Multiplayer uses direct WebRTC connections (PeerJS). As with any peer-to-peer game,
-  players in the same party can learn each other's network (IP) address, and the public PeerJS signalling broker
-  sees connection metadata (peer ids, party codes - no wallet data). Only play with people you are comfortable
-  sharing that with. A relay (TURN) server would hide it; none is configured.
-- **Secrets.** `contracts/.env` (the deployer key) is git-ignored and is never read by the game or included in a
-  build. Only `VITE_HEMI_RPC_URL` and `VITE_WALLETCONNECT_PROJECT_ID` are exposed to the frontend - neither is a
-  secret.
+- **No game server, no tracking.** NIGHT SHIFT has no backend of its own: no accounts, player database,
+  leaderboard, analytics or telemetry.
+- **Your wallet address.** It is shown only to you (shortened) and is never sent to other players or to the
+  signalling server. It is kept in your browser's local storage (to remember your save and paid entries), and,
+  like any dApp, your wallet and the Hemi RPC (and WalletConnect's relay, if you use it) see it. Wallet errors in
+  the browser console are redacted.
+- **Payments are public.** Entry fees are ordinary blockchain transactions, so anyone can see on the block
+  explorer that your address paid the entry contract.
+- **Multiplayer parties.** To prove the party was paid for, joiners receive the party code, a party secret and a
+  block number - never an address or transaction hash - and check the creator's entry on Hemi with a free read.
+  Because that proof points to the payment on-chain, a party member who looks it up on the explorer can find the
+  creator's paying address. Creators should use a testnet-only wallet.
+- **Multiplayer networking.** Multiplayer and voice chat use WebRTC (PeerJS). Players connect directly
+  whenever their networks allow it; as in most peer-to-peer games, players in the same party can then learn each
+  other's IP address. When a direct connection is impossible (for example on some mobile or strict networks),
+  traffic is relayed through Cloudflare's TURN service instead - the relay hides players' IP addresses from each
+  other, but Cloudflare sees them and carries that (encrypted) game and voice traffic. The public PeerJS
+  signalling broker and the STUN servers used to set up connections (Google, Twilio, Cloudflare) also see your
+  IP address. Only play with people you are comfortable sharing that with.
