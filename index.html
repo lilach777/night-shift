@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NIGHT SHIFT</title>
+  <meta name="description" content="NIGHT SHIFT — a first-person browser horror game. St. Mercy Hospital, 2:13 AM." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%238a0d0d'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game"></canvas>
+
+    <!-- Loading -->
+    <section id="loading" class="screen active">
+      <div class="title">NIGHT SHIFT</div>
+      <div class="loading-line"><span id="loading-bar"></span></div>
+      <div id="loading-text" class="sub">Loading...</div>
+      <div id="boot-error" class="error hidden"></div>
+    </section>
+
+    <!-- Main menu -->
+    <section id="menu" class="screen">
+      <div class="menu-inner">
+        <div class="title big">NIGHT SHIFT</div>
+        <div class="tag">St. Mercy Hospital &middot; 2:13 AM</div>
+        <nav class="menu-buttons">
+          <button data-action="new">NEW GAME</button>
+          <button data-action="continue" id="btn-continue">CONTINUE</button>
+          <button data-action="multiplayer">MULTIPLAYER</button>
+          <button data-action="wallet">CONNECT WALLET</button>
+          <button data-action="settings">SETTINGS</button>
+          <button data-action="credits">CREDITS</button>
+        </nav>
+        <div class="hint">Headphones recommended &middot; Click to enable sound</div>
+      </div>
+    </section>
+
+    <!-- ===================== MULTIPLAYER (separate mode) ===================== -->
+    <section id="mp-menu" class="screen">
+      <div class="menu-inner">
+        <div class="title big">NIGHT SHIFT</div>
+        <div class="tag">MULTIPLAYER &middot; 2&ndash;4 PLAYERS &middot; CO-OP</div>
+        <label class="mp-field">NAME <input id="mp-name" maxlength="16" spellcheck="false" autocomplete="off" /></label>
+        <nav class="menu-buttons">
+          <button data-action="mp-rejoin" id="mp-rejoin" class="hidden">REJOIN LAST PARTY</button>
+          <button data-action="mp-create">CREATE PARTY</button>
+          <button data-action="mp-joinscreen">JOIN PARTY</button>
+          <button data-action="wallet">CONNECT WALLET</button>
+          <button data-action="mp-exit">BACK</button>
+        </nav>
+        <div id="mp-menu-msg" class="mp-msg"></div>
+        <div class="hint">Voice chat needs a microphone &middot; Headphones strongly recommended</div>
+      </div>
+    </section>
+
+    <section id="mp-join" class="screen">
+      <div class="menu-inner">
+        <div class="title">JOIN PARTY</div>
+        <label class="mp-field">PARTY CODE <input id="mp-code" maxlength="5" spellcheck="false" autocomplete="off" placeholder="X7K4P" /></label>
+        <nav class="menu-buttons">
+          <button data-action="mp-join">JOIN</button>
+          <button data-action="mp-back">BACK</button>
+        </nav>
+        <div id="mp-join-msg" class="mp-msg"></div>
+      </div>
+    </section>
+
+    <section id="mp-lobby" class="screen">
+      <div class="mp-lobby-inner">
+        <div class="title">NIGHT SHIFT</div>
+        <div class="tag">MULTIPLAYER LOBBY</div>
+        <div class="mp-code-box"><div class="label">PARTY CODE</div><div id="mp-code-show">-----</div><button data-action="mp-copy" class="ghost small">COPY</button></div>
+        <div class="mp-count" id="mp-count">PLAYERS 1/4</div>
+        <div id="mp-slots"></div>
+        <div class="mp-row-buttons">
+          <button data-action="mp-ready" id="mp-ready">READY</button>
+          <button data-action="mp-mic" id="mp-mic">MIC: OFF</button>
+          <button data-action="mp-spk" id="mp-spk">SPEAKER: ON</button>
+        </div>
+        <nav class="menu-buttons">
+          <button data-action="mp-start" id="mp-start">START GAME</button>
+          <button data-action="mp-leave">LEAVE PARTY</button>
+        </nav>
+        <div id="mp-lobby-msg" class="mp-msg"></div>
+        <div class="controls-help" id="mp-help"><span>V</span> hold to talk &nbsp; <span>B</span> speaker on/off &nbsp; <span>E</span> interact / revive (hold) &nbsp; <span>F</span> flashlight<br />Push-to-talk key and open-mic mode: SETTINGS &rsaquo; AUDIO</div>
+      </div>
+    </section>
+
+    <section id="mp-hud" class="hidden">
+      <div id="mp-objectives"><div class="label">OBJECTIVE</div><div id="mp-obj-list"></div></div>
+      <div id="mp-warning" class="hidden">RUN.</div>
+      <div id="mp-team"></div>
+      <div id="mp-voice"><span id="mp-voice-mic">MIC OFF</span> <span id="mp-voice-spk">SPK ON</span></div>
+      <div id="mp-progress" class="hidden"><div class="label"></div><div class="bar"><span></span></div></div>
+      <div id="mp-downed" class="hidden"><div class="big">YOU ARE DOWN</div><div class="sub">Hold on. A teammate can revive you.</div><div class="bar"><span></span></div></div>
+      <div id="mp-dead" class="hidden"><div class="big">YOU DIED</div><div class="sub">Spectating. You rejoin at the next checkpoint.</div></div>
+    </section>
+    <div id="mp-ending" class="hidden">
+      <div class="title big">NIGHT SHIFT</div>
+      <div class="sub">MULTIPLAYER</div>
+    </div>
+
+    <!-- Pause -->
+    <section id="pause" class="screen dim">
+      <div class="menu-inner">
+        <div class="title">NIGHT SHIFT</div>
+        <div class="subtitle">PAUSED</div>
+        <nav class="menu-buttons">
+          <button data-action="resume">RESUME</button>
+          <button data-action="settings">SETTINGS</button>
+          <button data-action="restart">RESTART</button>
+          <button data-action="mainmenu">MAIN MENU</button>
+        </nav>
+        <div class="controls-help">
+          <span>WASD</span> move &nbsp; <span>MOUSE</span> look &nbsp; <span>SHIFT</span> sprint &nbsp; <span>CTRL</span> crouch<br />
+          <span>E</span> interact &nbsp; <span>F</span> flashlight &nbsp; <span>R</span> replace battery &nbsp; <span>ESC</span> pause
+        </div>
+      </div>
+    </section>
+
+    <!-- Game over (third death) -->
+    <section id="gameover" class="screen dim">
+      <div class="menu-inner">
+        <div class="title">GAME OVER</div>
+        <div class="subtitle">IT FOUND YOU</div>
+        <nav class="menu-buttons">
+          <button data-action="retry">RETRY</button>
+          <button data-action="mainmenu">MAIN MENU</button>
+        </nav>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section id="settings" class="screen dim">
+      <div class="settings-inner">
+        <div class="title">SETTINGS</div>
+        <div class="tabs">
+          <button data-tab="graphics" class="on">GRAPHICS</button>
+          <button data-tab="audio">AUDIO</button>
+          <button data-tab="gameplay">GAMEPLAY</button>
+          <button data-tab="accessibility">ACCESSIBILITY</button>
+        </div>
+        <div id="settings-body"></div>
+        <div class="settings-foot">
+          <button data-action="reset-settings" class="ghost">RESET TO DEFAULTS</button>
+          <button data-action="back">BACK</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Credits -->
+    <section id="credits" class="screen dim">
+      <div class="menu-inner credits">
+        <div class="title">CREDITS</div>
+        <p>NIGHT SHIFT</p>
+        <p class="small">Design, code, 3D and sound: built with three.js and Blender.<br />
+          The hospital, props and the Koala were procedurally authored in Blender for this game.
+          The human characters were built in Blender with MPFB / MakeHuman (CC0 output and CC0 system
+          assets); their motion uses the Universal Animation Library by Quaternius (CC0), retargeted and
+          extended with hand-keyed animation in Blender. Flashlight: "Small Plastic Torch" by Abiyyu
+          Panggalih, Poly Haven (CC0). Tree foliage: Leaf Set 009 / 010 scans, ambientCG.com (CC0).<br />
+          The piano, UI sounds and the chase/tension score were synthesised for this game. Almost all
+          other sound is real recordings from Freesound.org (CC0 public domain and CC BY), selected,
+          filtered, mixed, looped and spatialised for the game: storm, electrical hum and lights,
+          building ambience, doors, phones, foley, the Koala and the stingers.
+          CC BY 3.0/4.0 recordings by Artninja, DWOBoyle, Dan_AudioFile, F.M.Audio, Ulrich_Wehner,
+          WiesenWiesel, copyc4t, iainmccurdy, klankbeeld, lebaston100, nornalbion and ryks88.
+          Walking and running: "concrete footsteps 1" (freesound_community, Pixabay Content License).
+          Full list with authors, licences and links: assets/audio/CREDITS_EXTERNAL.json.<br />
+          Voices: Chatterbox neural text-to-speech (Resemble AI, MIT) with synthetic Kokoro-82M
+          reference voices (Apache-2.0); the first phone call: offline text-to-speech, processed. The multiplayer
+          caretaker, public-address and phone lines use the same voices, filtered as telephone / ceiling-horn audio.
+          The multiplayer building alarm is synthesised in real time (Web Audio). Multiplayer set dressing, the
+          emergency shutter and the new Koala clips (stalk, sniff, twitch) were authored in Blender for this game.
+          Handwriting font: Reenie Beanie by James Grieshaber (SIL Open Font License). Multiplayer networking:
+          PeerJS (MIT) over WebRTC.</p>
+        <p class="small">three.js &mdash; MIT License</p>
+        <nav class="menu-buttons"><button data-action="back">BACK</button></nav>
+      </div>
+    </section>
+
+    <!-- HUD -->
+    <section id="hud" class="hidden">
+      <div id="crosshair"></div>
+      <div id="prompt" class="hidden"></div>
+      <div id="hud-objective" class="hidden"><div class="label">OBJECTIVE</div><div class="text"></div><div class="count"></div></div>
+      <div id="hud-clock" class="hidden">2:13 AM</div>
+      <div id="hud-stats">
+        <div id="hud-lives" class="hidden">LIVES: <b>3</b></div>
+        <div id="hud-battery" class="hidden">BATTERY: <b>100%</b> <i id="hud-spares"></i></div>
+        <div id="hud-stamina" class="hidden">STAMINA: <span class="bar"><span class="fill"></span></span></div>
+      </div>
+      <div id="toast" class="hidden"></div>
+      <div id="thought" class="hidden"></div>
+      <div id="reader" class="hidden"></div>
+    </section>
+
+    <div id="subtitles"></div>
+    <div id="timecard" class="hidden"></div>
+    <div id="letterbox" class="hidden"><i></i><i></i></div>
+    <div id="fade"></div>
+    <div id="flash"></div>
+    <div id="click-to-play" class="hidden"><div>CLICK TO CONTINUE</div></div>
+    <div id="debug" class="hidden"></div>
+    <div id="ending" class="hidden">
+      <div class="title big">NIGHT SHIFT</div>
+      <div class="sub">THE END</div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

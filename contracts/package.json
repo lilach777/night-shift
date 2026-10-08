@@ -1,0 +1,19 @@
+{
+  "name": "night-shift-contracts",
+  "private": true,
+  "description": "NIGHT SHIFT entry contract (Hemi Testnet). Hardhat + OpenZeppelin.",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:hemi": "hardhat run scripts/deploy.js --network hemiTestnet",
+    "smoke:hemi": "hardhat run scripts/smoke.js --network hemiTestnet"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.6.1",
+    "dotenv": "^18.0.6",
+    "hardhat": "^2.29.1"
+  }
+}

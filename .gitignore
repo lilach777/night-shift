@@ -1,0 +1,29 @@
+node_modules/
+dist/
+*.blend1
+blender/previews/
+
+# secrets / local env (never commit)
+.env
+.env.*
+!.env.example
+contracts/.env
+contracts/node_modules/
+contracts/cache/
+contracts/artifacts/
+
+# Python bytecode (Blender build scripts)
+__pycache__/
+*.pyc
+
+# local editor / agent tooling
+.claude/
+.vscode/
+.idea/
+
+# logs and OS files
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+desktop.ini

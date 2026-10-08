@@ -1,0 +1,16 @@
+{
+  "local": {
+    "chainId": 743111,
+    "address": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    "block": 3,
+    "entryFeeWei": "1000000000000000",
+    "deployedAt": "2026-10-08T04:47:31.680Z"
+  },
+  "hemiTestnet": {
+    "chainId": 743111,
+    "address": "0x44BB53fcFD7a99c360A8b6a74DAdAd1879b1FA95",
+    "block": 6944310,
+    "entryFeeWei": "1000000000000000",
+    "deployedAt": "2026-10-08T06:55:47.392Z"
+  }
+}

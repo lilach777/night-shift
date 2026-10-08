@@ -1,0 +1,25 @@
+{
+  "name": "night-shift",
+  "version": "1.0.0",
+  "description": "NIGHT SHIFT — a first-person browser horror game (three.js + Blender).",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "layout": "node tools/gen-layout.mjs"
+  },
+  "dependencies": {
+    "@coinbase/wallet-sdk": "^4.4.0",
+    "@wagmi/connectors": "^5.11.2",
+    "@wagmi/core": "^2.22.1",
+    "@walletconnect/ethereum-provider": "^2.25.0",
+    "peerjs": "^1.5.5",
+    "three": "^0.186.1",
+    "viem": "^2.57.4"
+  },
+  "devDependencies": {
+    "vite": "^8.3.2"
+  }
+}
