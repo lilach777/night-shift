@@ -155,7 +155,9 @@ export class MPMode {
     } catch (e) {
       console.warn('[mp] join failed', safeError(e));
       try { this.net.leave({ forget: false }); } catch { /* ignore */ }
-      const t = e.type === 'full' ? 'PARTY FULL (4/4)' : e.type === 'invalid' ? 'NO PARTY WITH THAT CODE - IT MAY HAVE ENDED'
+      const t = e.type === 'full' ? 'PARTY FULL (4/4)'
+        : e.type === 'invalid' ? 'NO PARTY WITH THAT CODE - CHECK THE CODE, AND ASK THE HOST TO KEEP THE GAME OPEN'
+        : e.type === 'unreachable' ? 'FOUND THE PARTY BUT COULD NOT CONNECT - YOUR NETWORKS MAY BLOCK DIRECT CONNECTIONS. TRY AGAIN OR ANOTHER NETWORK'
         : e.type === 'ended' ? 'THAT NIGHT IS OVER - THE PARTY HAS ENDED' : (e.message || 'COULD NOT JOIN').toUpperCase();
       this.msg(msgId, t);
     }
@@ -194,7 +196,7 @@ export class MPMode {
     const allReady = r.every(m => m.host || m.ready);
     $('mp-start').style.display = this.net.isHost ? '' : 'none';
     $('mp-start').disabled = !allReady;
-    if (this.net.isHost) this.msg('mp-lobby-msg', r.length < 2 ? 'SHARE THE CODE - 2-4 PLAYERS (YOU CAN ALSO START ALONE)' : allReady ? 'EVERYONE IS READY' : 'WAITING FOR EVERYONE TO BE READY', true);
+    if (this.net.isHost) this.msg('mp-lobby-msg', r.length < 2 ? 'SHARE THE CODE AND KEEP THIS GAME OPEN WHILE FRIENDS JOIN - 2-4 PLAYERS (YOU CAN ALSO START ALONE)' : allReady ? 'EVERYONE IS READY' : 'WAITING FOR EVERYONE TO BE READY', true);
     else this.msg('mp-lobby-msg', 'WAITING FOR THE HOST TO START...', true);
     clearTimeout(this._lvlT);
     this._lvlT = setTimeout(() => { if (!this.session && this.g.ui.current === 'mp-lobby') { this.voice.update(null, null, null); this.renderLobby(); } }, 400);

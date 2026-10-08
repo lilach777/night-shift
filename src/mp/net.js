@@ -76,6 +76,40 @@ export class Net {
     this.status = 'idle';        // idle | lobby | game
     this.sinceSend = 0;
     this.migrating = false;
+    // broker keep-alive that does not depend on frames: a hidden / background tab stops requestAnimationFrame
+    // (tick), but the party code must stay registered while the host is e.g. sending the code to a friend
+    setInterval(() => this._keepBroker(), 3000);
+    const now = () => this._keepBroker();
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) now(); });
+    window.addEventListener('online', now);
+  }
+
+  // re-register with the signalling broker. When a broker socket drops (background tab, network blip)
+  // PeerJS destroys that peer for good if it had never been disconnected before - so the host claims the
+  // party code again (retrying while the broker may still hold it), and my own id is registered again.
+  _keepBroker() {
+    if (this.leaving || this.status === 'idle') return;
+    for (const p of [this.peer, this.alias]) if (p && p.disconnected && !p.destroyed) { try { p.reconnect(); } catch { /* retried next time */ } }
+    // my own peer was destroyed (a broker socket that closed before ever disconnecting is destroyed by
+    // PeerJS): register the SAME id again - the roster, voice calls and host migration address me by it.
+    // Existing game links are direct WebRTC connections and keep running meanwhile.
+    const myId = this.me?.peerId;
+    if (this.peer && this.peer.destroyed && myId && !this._reopening) {
+      this._reopening = true;
+      const dead = this.peer;
+      this._open(myId).then(p => {
+        if (this.leaving || this.status === 'idle' || this.peer !== dead) { try { p.destroy(); } catch { /* ignore */ } return; }
+        this.peer = p; this._wirePeer(p);
+        if (this.isHost) p.on('connection', conn => this._hostAccept(conn));
+      }).catch(() => { /* id not released yet: retried next time */ }).finally(() => { this._reopening = false; });
+    }
+    if (this.isHost && this.code && (!this.alias || this.alias.destroyed) && !this._reclaiming && !this._promoting) {
+      this._reclaiming = true;
+      const code = this.code;
+      this._claimCode(code, 1).catch(() => false)
+        .then(ok => { if (ok && (this.leaving || this.status === 'idle' || this.code !== code)) { try { this.alias?.destroy(); } catch { /* ignore */ } } })
+        .finally(() => { this._reclaiming = false; });
+    }
   }
 
   on(type, fn) { (this.handlers[type] ||= []).push(fn); }
@@ -113,7 +147,9 @@ export class Net {
       try {
         const a = await this._open(PREFIX + code);
         a.on('connection', conn => this._hostAccept(conn));
-        a.on('disconnected', () => { if (!this.leaving && !a.destroyed && this.alias === a) { try { a.reconnect(); } catch { /* ignore */ } } });
+        // deferred: PeerJS fires 'disconnected' from inside destroy() before marking the peer destroyed - an
+        // immediate reconnect there would revive the socket of a dead peer that then holds the code forever
+        a.on('disconnected', () => setTimeout(() => { if (!this.leaving && !a.destroyed && a.disconnected && this.alias === a) { try { a.reconnect(); } catch { /* ignore */ } } }, 0));
         this.alias = a; this.code = code;
         return true;
       } catch (e) {
@@ -215,7 +251,9 @@ export class Net {
     return new Promise((resolve, reject) => {
       let done = false;
       const fail = (e) => { if (done) return; done = true; clearTimeout(t); try { conn.close(); } catch { /* ignore */ } reject(e); };
-      const t = setTimeout(() => fail(err('No party found with that code. It may have ended.', 'invalid')), 10000);
+      // the broker answers "peer-unavailable" at once when no such party is registered; a party that exists
+      // but cannot be reached (networks blocking a direct connection) only shows up as this timeout
+      const t = setTimeout(() => fail(err('Could not connect to the host.', 'unreachable')), 10000);
       const onErr = e => { if (e.type === 'peer-unavailable') fail(err('No party found with that code. It may have ended.', 'invalid')); };
       this.peer.on('error', onErr);
       const conn = this.peer.connect(target, { reliable: true, serialization: 'json', metadata: { name, token: this.token, migrate } });
@@ -309,11 +347,14 @@ export class Net {
     // the old code: the broker frees it once the old host's socket is gone; keep trying, then a new one
     const old = this.code;
     let ok = false;
-    for (let i = 0; i < 12 && !ok && this.isHost; i++) {
-      ok = await this._claimCode(old, 1).catch(() => false);
-      if (!ok) await new Promise(r => setTimeout(r, 5000));
-    }
-    if (!ok && this.isHost) { await this._claimCode(null, 4).catch(() => false); }
+    this._promoting = true;          // the broker keep-alive must not race this reclaim
+    try {
+      for (let i = 0; i < 12 && !ok && this.isHost; i++) {
+        ok = await this._claimCode(old, 1).catch(() => false);
+        if (!ok) await new Promise(r => setTimeout(r, 5000));
+      }
+      if (!ok && this.isHost) { await this._claimCode(null, 4).catch(() => false); }
+    } finally { this._promoting = false; }
     if (this.isHost && this.code) { this.broadcast({ t: 'code', code: this.code }); rememberParty({ ...(lastParty() || {}), code: this.code, at: Date.now(), host: true }); this.emit('code', this.code); }
   }
   // I am not the successor: reconnect to whoever is (retrying while they set up)
@@ -335,7 +376,8 @@ export class Net {
       this._wireCall(call);
     });
     // the broker connection dropped (not the game links): re-register - unless we are leaving on purpose
-    peer.on('disconnected', () => { if (!this.leaving && !peer.destroyed && this.peer === peer) { try { peer.reconnect(); } catch { /* ignore */ } } });
+    // (deferred for the same reason as the party-code peer: never reconnect a peer that is being destroyed)
+    peer.on('disconnected', () => setTimeout(() => { if (!this.leaving && !peer.destroyed && peer.disconnected && this.peer === peer) { try { peer.reconnect(); } catch { /* ignore */ } } }, 0));
   }
   _wireCall(call) {
     this.calls.set(call.peer, call);
