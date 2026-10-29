@@ -15,12 +15,8 @@ const me = (x, y, z, yaw = 0) => NS().player.teleport(x, y, z, yaw);
 let B = [];
 
 export async function start(bots = 1) {
-  // creating a party now needs the creator's entry: with the local dev wallet (?devwallet=1) press PAY in the dialog
-  for (let i = 0; i < 120 && !(NS() && NS().mp?.net.code); i++) {
-    const pay = [...document.querySelectorAll('#w3-modal button')].find(b => /PAY & CREATE|^CREATE PARTY$/.test(b.textContent) && !b.disabled);
-    if (pay) pay.click();
-    await sleep(250);
-  }
+  // wait until the party exists (CREATE PARTY is free: no dialog to answer)
+  for (let i = 0; i < 120 && !(NS() && NS().mp?.net.code); i++) await sleep(250);
   NS().mp.hostStart();
   for (let i = 0; i < 80 && !S()?.started; i++) await sleep(250);
   NS().pause = () => {};

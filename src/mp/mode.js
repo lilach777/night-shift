@@ -4,12 +4,11 @@
 import { audio } from '../audio/audio.js';
 import { settings } from '../core/settings.js';
 import { keyLabel } from '../ui/ui.js';
-import { Net, MAX_PLAYERS, normCode, lastParty, rememberVerified } from './net.js';
+import { Net, MAX_PLAYERS, normCode, lastParty } from './net.js';
 import { Voice } from './voice.js';
 import { MPSession } from './session.js';
 import { defaultState } from './story.js';
 import { wallet } from '../web3/wallet.js';
-import { updateEntry, verifyParty } from '../web3/entry.js';
 import { safeError } from '../web3/privacy.js';
 import { shortAddr } from '../web3/chain.js';
 
@@ -99,36 +98,27 @@ export class MPMode {
     if (ok) b.textContent = `REJOIN LAST PARTY (${lp.code})`;
   }
 
-  // CREATE PARTY: wallet + Hemi + the creator pays the entry ONCE for this party (an unused confirmed
-  // entry - e.g. the lobby was closed before the night began - is reused, never charged again)
+  // CREATE PARTY: wallet + Hemi, free (no transaction)
   async create() {
     this.g.startAudio();
     if (this.creating || !this.g.web3.requireReady()) return;
     this.creating = true;
     try {
-      const entry = await this.g.web3.confirmEntry('party');
-      if (!entry) return;
-      this.partyEntry = entry;
-      // what travels with the party: the code, the commitment's secret and a block hint - never an address or tx hash
-      this.net.partyInfo = { code: entry.partyCode, secret: entry.partySecret, block: entry.block ?? null };
       this.msg('mp-menu-msg', 'CREATING PARTY...', true);
       await this.voice.init();
-      await this.net.create(this.name(), entry.partyCode);         // exactly the code the payment is bound to
-      updateEntry(entry, { party: this.net.code });
+      await this.net.create(this.name());
       this.ready = true;
       this.g.ui.show('mp-lobby');
       this.renderLobby();
       this.voice.enableMic(true).then(() => this.renderLobby());
     } catch (e) {
       console.warn('[mp] create failed', safeError(e));
-      this.msg('mp-menu-msg', (e.message || 'COULD NOT CREATE A PARTY').toUpperCase() + ' (YOUR ENTRY IS KEPT - NO NEW PAYMENT)');
+      this.msg('mp-menu-msg', (e.message || 'COULD NOT CREATE A PARTY').toUpperCase());
     } finally { this.creating = false; }
   }
 
-  // JOIN PARTY: wallet + Hemi only. Joiners NEVER pay and this path never touches payEntry().
-  // verifiedCode (REJOIN only): the party's original code this player already verified on-chain - the
-  // code a successor host falls back to after a migration is not part of the payment commitment
-  async join(codeOverride, verifiedCode = null) {
+  // JOIN PARTY: wallet + Hemi, free (no transaction)
+  async join(codeOverride) {
     this.g.startAudio();
     if (!this.g.web3.requireReady()) return;
     const code = normCode(codeOverride || $('mp-code').value);
@@ -138,11 +128,6 @@ export class MPMode {
     try {
       await this.voice.init();
       const w = await this.net.join(code, this.name());
-      // the party must be backed by a confirmed creator entry on Hemi (one free read, no transaction)
-      // checked against the code THIS player typed (or verified earlier), never one the host reports   // null = Hemi unreachable: allow
-      const paid = await verifyParty(w.party, verifiedCode || code).catch(() => null);
-      if (paid === false) { this.net.leave({ forget: false }); throw Object.assign(new Error('THIS PARTY HAS NO CONFIRMED ENTRY ON HEMI TESTNET.'), { type: 'unpaid' }); }
-      if (paid) rememberVerified(w.party.code);
       if (w.status === 'game') {
         // the night is already running: the host sends the whole state right after the welcome
         this.msg(msgId, 'JOINING THE NIGHT IN PROGRESS...', true);
@@ -167,7 +152,7 @@ export class MPMode {
     const lp = lastParty(); if (!lp?.code) return;
     if (!this.g.web3.requireReady()) return;
     $('mp-name').value = lp.name || $('mp-name').value;
-    await this.join(lp.code, lp.verified || null);
+    await this.join(lp.code);
     this.refreshRejoin();
   }
 
@@ -214,7 +199,6 @@ export class MPMode {
     const seed = Math.floor(Math.random() * 1e9);
     const msg = { t: 'start', seed, roster: this.net.pubRoster(), state: state || defaultState(seed, this.net.roster.length) };
     this.net.status = 'game';
-    if (this.partyEntry) updateEntry(this.partyEntry, { used: true, usedAt: Date.now(), started: this.net.code });   // this party's night has begun
     this.net.broadcast(msg);
     this.beginGame(msg);
   }

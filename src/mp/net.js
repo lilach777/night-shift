@@ -45,8 +45,6 @@ function myToken() {
 }
 export function lastParty() { try { return JSON.parse(sessionStorage.getItem(LAST_KEY) || 'null'); } catch { return null; } }
 function rememberParty(v) { try { if (v) sessionStorage.setItem(LAST_KEY, JSON.stringify(v)); else sessionStorage.removeItem(LAST_KEY); } catch { /* ignore */ } }
-// this tab verified the party's on-chain entry under its original code (REJOIN checks against it)
-export function rememberVerified(code) { const lp = lastParty(); if (lp) rememberParty({ ...lp, verified: code }); }
 
 const STUN = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }];
 let iceCache = null;   // { servers, until }
@@ -149,17 +147,16 @@ export class Net {
   }
 
   // ================================================================== HOST
-  // code: the party code the creator's entry is bound to (the payment commitment includes it)
-  async create(name, code = null) {
+  async create(name) {
     this.peer = await this._open(undefined);
     this._wirePeer(this.peer);
     this.peer.on('connection', conn => this._hostAccept(conn));
-    const ok = await this._claimCode(code || null);
-    if (!ok || !this.code) { try { this.peer.destroy(); } catch { /* ignore */ } this.peer = null; throw err(code ? 'Your party code is still in use. Try again in a minute.' : 'Could not create a party. Try again.', 'network'); }
+    const ok = await this._claimCode(null);
+    if (!ok || !this.code) { try { this.peer.destroy(); } catch { /* ignore */ } this.peer = null; throw err('Could not create a party. Try again.', 'network'); }
     this.isHost = true; this.status = 'lobby';
     this.me = { slot: 0, name, peerId: this.peer.id, ready: true, mic: false, spk: true, host: true };
     this.roster = [this.me];
-    rememberParty({ code: this.code, name, at: Date.now(), host: true, verified: this.partyInfo?.code });   // my own payment
+    rememberParty({ code: this.code, name, at: Date.now(), host: true });
     this.emit('roster', this.roster);
     return this.code;
   }
@@ -217,7 +214,7 @@ export class Net {
       conn.on('data', m => this._hostRecv(conn.peer, m));
       conn.on('close', () => this._drop(conn.peer, conn));
       conn.on('error', () => this._drop(conn.peer, conn));
-      conn.send({ t: 'welcome', code: this.code, you: this.pub(member), roster: this.pubRoster(), status: this.status, party: this.partyInfo || null });
+      conn.send({ t: 'welcome', code: this.code, you: this.pub(member), roster: this.pubRoster(), status: this.status });
       this.broadcast({ t: 'roster', roster: this.pubRoster() });
       this.emit('roster', this.roster);
       this.emit('join', member, resume);
@@ -289,16 +286,12 @@ export class Net {
         if (m.t === 'welcome' && !done) {
           clearTimeout(t); done = true;
           this.code = m.code || this.code; this.me = m.you; this.roster = m.roster; this.status = m.status === 'game' ? 'game' : 'lobby';
-          if (m.party) this.partyInfo = m.party;          // the creator's entry reference travels with the party (host migration keeps it)
           this.isHost = false;
           const old = this.conns.get('host'); if (old && old !== conn) { old.__replaced = true; try { old.close(); } catch { /* ignore */ } }
           this.conns.set('host', conn);
           this.hostPeer = conn.peer;
           this.lastSeen.set('host', performance.now());
-          // keep `verified` (the original code this player checked on-chain) only while it is still the same party
-          const prev = lastParty();
-          const verified = prev?.verified && prev.verified === m.party?.code ? prev.verified : undefined;
-          rememberParty({ code: this.code, name, at: Date.now(), host: false, verified });
+          rememberParty({ code: this.code, name, at: Date.now(), host: false });
           this.emit('roster', this.roster);
           resolve(m);
           return;

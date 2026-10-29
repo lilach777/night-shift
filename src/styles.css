@@ -234,13 +234,6 @@ body.cine-on #mp-hud, body.cine-on #hud-stats, body.cine-on #hud-clock, body.cin
 .w3-box .w3-sub { font-size: 12px; line-height: 1.6; color: #bdb6a6; letter-spacing: 0.04em; }
 .w3-box .w3-fine { font-size: 10px; color: var(--dim); letter-spacing: 0.08em; line-height: 1.5; }
 .w3-box .w3-msg { white-space: pre-line; font-size: 12px; letter-spacing: 0.18em; color: #d7cdb8; min-height: 1em; }
-.w3-box .w3-wallet { font-size: 11px; letter-spacing: 0.2em; color: #9fbf8f; }
-.w3-box .w3-fee { font-family: var(--title-font); font-size: 18px; color: #efe7d4; letter-spacing: 0.06em; }
-.w3-box .w3-state { font-size: 11px; letter-spacing: 0.22em; color: #d7cdb8; min-height: 1.2em; }
-.w3-box .w3-state.pending, .w3-box .w3-state.approval, .w3-box .w3-state.checking { color: #e8d9a6; animation: blink 1.2s steps(2) infinite; }
-.w3-box .w3-state.confirmed { color: #9fbf8f; }
-.w3-box .w3-state.failed, .w3-box .w3-state.rejected { color: #c0453a; }
-.w3-box .w3-link { font-size: 11px; letter-spacing: 0.25em; color: #9fb3c8; }
 .w3-box .w3-list { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow: auto; }
 .w3-box .w3-opt { display: flex; align-items: center; gap: 12px; justify-content: flex-start; padding: 10px 14px; font-size: 12px; letter-spacing: 0.2em; }
 .w3-box .w3-opt img { width: 20px; height: 20px; }

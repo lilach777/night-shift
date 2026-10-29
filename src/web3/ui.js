@@ -2,12 +2,10 @@
 //   * a small wallet panel on the menus: WALLET NOT CONNECTED / CONNECTED 0x12AB...89CD HEMI TESTNET /
 //     WRONG NETWORK + the one button that fixes it
 //   * a wallet chooser (installed wallets, Coinbase Wallet, WalletConnect)
-//   * the entry dialog for NEW GAME / CREATE PARTY: the exact on-chain fee, a note about network gas,
-//     every transaction state, and a Hemi explorer link once confirmed
+// The game is free to play: the wallet is never asked to send a transaction.
 // All dynamic text goes through textContent (no wallet name / address can inject markup).
 import { wallet, startWallet, walletOptions, connectWallet, disconnectWallet, switchToHemi } from './wallet.js';
-import { payEntry, readFee, fmtFee, reusableEntry, entryState, contractReady } from './entry.js';
-import { shortAddr, txUrl } from './chain.js';
+import { shortAddr } from './chain.js';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
@@ -59,7 +57,6 @@ export class WalletUI {
     for (const p of this.panels) this.renderPanel(p);
     for (const b of document.querySelectorAll('[data-action=wallet]')) b.textContent = wallet.connected ? 'DISCONNECT WALLET' : 'CONNECT WALLET';
     if (this.chooserOpen) this.renderChooser();
-    if (this.entryOpen) this.renderEntryWalletLine();
   }
   async switchNet() {
     if (wallet.busy) return;
@@ -88,7 +85,7 @@ export class WalletUI {
     this.modal = root; this.box = box;
   }
   show(build) { this.box.textContent = ''; build(this.box); this.modal.classList.remove('hidden'); }
-  hide() { this.modal.classList.add('hidden'); this.chooserOpen = false; this.entryOpen = false; this.gateOpen = false; }
+  hide() { this.modal.classList.add('hidden'); this.chooserOpen = false; this.gateOpen = false; }
 
   openGate(text, btnText, onBtn) {
     this.gateOpen = true;
@@ -162,59 +159,5 @@ export class WalletUI {
   async toggleConnection() {
     if (wallet.connected) { await disconnectWallet(); this.refresh('disconnect'); }
     else this.openChooser();
-  }
-
-  // ------------------------------------------------------------------ the entry dialog
-  // kind: 'sp' (NEW GAME) | 'party' (CREATE PARTY). Resolves with the confirmed entry or null.
-  confirmEntry(kind) {
-    if (!this.requireReady()) return Promise.resolve(null);
-    if (entryState.inFlight) return Promise.resolve(null);
-    return new Promise(resolve => {
-      this.entryOpen = true; this.entryKind = kind;
-      const reuse = reusableEntry(kind);
-      const party = kind === 'party';
-      let feeText = 'READING FEE FROM HEMI...', fee = null, done = false;
-      const finish = (v) => { if (done) return; done = true; resolve(v); };
-      this.show(box => {
-        box.appendChild(el('div', 'w3-title', party ? 'CREATE PARTY' : 'NEW GAME'));
-        this.entryWallet = el('div', 'w3-wallet'); box.appendChild(this.entryWallet); this.renderEntryWalletLine();
-        const feeEl = el('div', 'w3-fee', reuse ? 'ENTRY ALREADY PAID' : 'Entry fee: ' + feeText); box.appendChild(feeEl);
-        box.appendChild(el('div', 'w3-sub', reuse
-          ? (party ? 'Your confirmed entry for a party has not been used yet. No new payment.' : 'Your confirmed entry has not been used yet. No new payment.')
-          : (party ? 'You pay the entry fee once to create this party. Players who join it pay nothing.' : 'A real transaction on Hemi Testnet. Continue never costs anything.')));
-        if (!reuse) box.appendChild(el('div', 'w3-fine', 'Your wallet also charges a small network gas fee (test ETH) to send it.'));
-        const state = el('div', 'w3-state', reuse ? '' : 'CONFIRM ENTRY'); box.appendChild(state);
-        const link = el('a', 'w3-link hidden', 'VIEW ON HEMI'); link.target = '_blank'; link.rel = 'noopener noreferrer'; box.appendChild(link);
-        const go = el('button', '', reuse ? (party ? 'CREATE PARTY' : 'START') : (party ? 'PAY & CREATE PARTY' : 'PAY & START')); box.appendChild(go);
-        const cancel = el('button', 'ghost small', 'CANCEL'); box.appendChild(cancel);
-        cancel.onclick = () => { if (entryState.inFlight) return; this.hide(); finish(null); };
-        const setState = (s, info = {}) => {
-          const T = { checking: 'CHECKING...', approval: 'WALLET AWAITING APPROVAL...', pending: 'CONFIRMING ENTRY... (TRANSACTION PENDING)', confirmed: info.reused ? 'ENTRY CONFIRMED' : 'TRANSACTION CONFIRMED', rejected: 'TRANSACTION CANCELLED', failed: info.message || 'TRANSACTION FAILED' };
-          state.textContent = T[s] || s; state.className = 'w3-state ' + s;
-          if (info.hash) { link.href = txUrl(info.hash); link.classList.remove('hidden'); }
-          const busy = s === 'checking' || s === 'approval' || s === 'pending';
-          go.disabled = busy || s === 'confirmed'; cancel.disabled = busy;
-          if (s === 'rejected' || s === 'failed') go.textContent = 'TRY AGAIN';
-        };
-        if (!reuse) {
-          if (!contractReady()) { setState('failed', { message: 'THE ENTRY CONTRACT IS NOT DEPLOYED ON HEMI TESTNET YET.' }); go.disabled = true; }
-          else readFee().then(w => { fee = w; feeEl.textContent = 'Entry fee: ' + fmtFee(w); }).catch(() => { feeEl.textContent = 'Entry fee: (could not read from Hemi)'; setState('failed', { message: 'COULD NOT REACH HEMI TESTNET. CHECK YOUR CONNECTION AND TRY AGAIN.' }); go.disabled = false; });
-        }
-        go.onclick = async () => {
-          if (entryState.inFlight || go.disabled) return;
-          if (!wallet.ready) { this.hide(); this.requireReady(); finish(null); return; }
-          const entry = await payEntry(kind, setState);
-          if (!entry) return;                                      // the state line says why; they can retry
-          const wasReused = !!reuse && entry.ref === reuse.ref;
-          setState('confirmed', { hash: entry.txHash, reused: wasReused });
-          state.textContent = (wasReused ? 'ENTRY CONFIRMED' : 'TRANSACTION CONFIRMED') + (party ? ' - CREATING PARTY...' : ' - STARTING...');
-          setTimeout(() => { this.hide(); finish(entry); }, entry.txHash ? 1600 : 600);
-        };
-      });
-    });
-  }
-  renderEntryWalletLine() {
-    if (!this.entryWallet) return;
-    this.entryWallet.textContent = wallet.ready ? `WALLET  ${shortAddr(wallet.address)}  ·  HEMI TESTNET` : wallet.connected ? 'WRONG NETWORK - SWITCH TO HEMI TESTNET' : 'WALLET NOT CONNECTED';
   }
 }

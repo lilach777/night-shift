@@ -1,6 +1,9 @@
 # NightShiftEntry - contract developer guide
 
-Developer documentation for the game's entry-fee contract. Players do not need any of this.
+> **No longer used.** NIGHT SHIFT is now free to play: the game never calls this contract and charges no
+> entry fee. This folder is kept only as the source of the contract that was deployed earlier.
+
+Developer documentation for the former entry-fee contract. Players do not need any of this.
 
 `contracts/NightShiftEntry.sol` (Solidity 0.8.24, OpenZeppelin `Ownable2Step` + `ReentrancyGuard`):
 

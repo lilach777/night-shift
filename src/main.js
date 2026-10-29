@@ -31,7 +31,6 @@ import { LobbyMirror } from './world/mirror.js';
 import { buildPhotoWall, NIGHT_STAFF } from './systems/photos.js';
 import { WalletUI } from './web3/ui.js';
 import { wallet } from './web3/wallet.js';
-import { reusableEntry, markUsed } from './web3/entry.js';
 import { shortAddr } from './web3/chain.js';
 
 const QUALITY = {
@@ -154,7 +153,7 @@ class Game {
       this.debug = new Debug(this);
     }
 
-    // the wallet / entry layer (both modes): panels on the menus, event-driven state, no RPC polling
+    // the wallet layer (both modes): panels on the menus, event-driven state, no RPC polling
     this.web3 = new WalletUI(this);
     this.web3.attachPanel(document.querySelector('#menu .menu-inner'));
     this.web3.attachPanel(document.querySelector('#mp-menu .menu-inner'));
@@ -251,13 +250,11 @@ class Game {
   // ------------------------------------------------------------------ UI wiring
   bindUI() {
     const ui = this.ui;
-    // NEW GAME = wallet + Hemi + a confirmed entry transaction. CONTINUE = wallet + Hemi, never a fee.
-    ui.on('new', async () => {
+    // NEW GAME and CONTINUE: wallet + Hemi, free to play (no transaction)
+    ui.on('new', () => {
       this.startAudio();
       if (!this.web3.requireReady()) return;
-      const entry = await this.web3.confirmEntry('sp');
-      if (!entry) return;                                         // cancelled / failed: the game does not start
-      if (this.sessionStarted) return this.reloadWith('new');     // the confirmed entry is used after the reload
+      if (this.sessionStarted) return this.reloadWith('new');
       this.newGame();
     });
     ui.on('continue', () => {
@@ -389,10 +386,8 @@ class Game {
   }
 
   newGame() {
-    // the confirmed, unused entry for this wallet is spent here (paid on the menu, or before a reload)
-    const entry = wallet.ready ? reusableEntry('sp') : null;
-    if (!entry) { this.toMenu(); this.web3.requireReady() && this.ui.toast('NEW GAME NEEDS A CONFIRMED ENTRY', 3); return; }
-    markUsed(entry, { started: 'single-player' });
+    // after a reload the wallet may still be reconnecting: back to the menu, which asks for it
+    if (!wallet.ready) { this.toMenu(); this.web3.requireReady(); return; }
     this.walletAtStart = wallet.address.toLowerCase();
     save.clear();
     this.lives = 3;
@@ -419,7 +414,7 @@ class Game {
     // park the car where it ends up (it stays there all night)
   }
 
-  // wallet events while playing: the run continues (gameplay never depends on the chain after entry),
+  // wallet events while playing: the run continues (gameplay never depends on the chain),
   // and progress stays with the wallet that started it - another account is never silently attached
   onWalletAccountChanged() {
     if (this.state === 'menu') return;

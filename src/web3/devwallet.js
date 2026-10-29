@@ -11,7 +11,6 @@
 //   .reject = 'connect' | 'tx' | 'switch'   simulate the user pressing "Reject"
 //   .setChain(1)                           pretend the wallet is on another network
 //   .account(i) / .disconnect()            account switch / wallet disconnect
-//   .tamperValue = '0x1'                   send the wrong fee once (on-chain revert)
 //   .calls                                 every method this provider was asked for
 const NODE = 'http://127.0.0.1:8545';
 let rpcId = 0;
@@ -28,7 +27,7 @@ const glyph = (c, col) => `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="
 function makeWallet(key, defaultIdx) {
   const store = 'nightshift.devwallet' + (key ? '.' + key : '');
   const remembered = (() => { try { return JSON.parse(localStorage.getItem(store) || 'null'); } catch { return null; } })();
-  const S = { accounts: null, idx: remembered?.idx ?? defaultIdx, chain: 743111, connected: !!remembered?.connected, reject: null, txs: [], calls: [], tamperValue: null };
+  const S = { accounts: null, idx: remembered?.idx ?? defaultIdx, chain: 743111, connected: !!remembered?.connected, reject: null, txs: [], calls: [] };
   const remember = () => { try { localStorage.setItem(store, JSON.stringify({ connected: S.connected, idx: S.idx })); } catch { /* ignore */ } };   // like an extension's site permission
   const listeners = {};
   const emit = (ev, v) => (listeners[ev] || []).forEach(f => { try { f(v); } catch (e) { console.error(e); } });
@@ -60,7 +59,6 @@ function makeWallet(key, defaultIdx) {
           if (S.reject === 'tx') { S.reject = null; throw rejected(); }
           if (S.chain !== 743111) throw new Error('wrong chain');
           const tx = { ...params[0], from: me };
-          if (S.tamperValue != null) { tx.value = S.tamperValue; S.tamperValue = null; tx.gas = '0x30000'; }   // force a revert (wrong fee)
           const h = await node('eth_sendTransaction', [tx]);
           S.txs.push(h);
           return h;

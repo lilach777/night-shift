@@ -67,8 +67,8 @@ public/assets/
   audio/          music/ ambience/ environment/ player/ monster/ voice/ ui/   (Ogg Vorbis)
 src/              game code (core, world, player, monster, systems, audio, ui)
   mp/             multiplayer (networking, lobby, session sync, voice)
-  web3/           wallet connection, Hemi Testnet config, entry payment, privacy helpers
-contracts/        NightShiftEntry (Solidity, Hardhat + OpenZeppelin): contract, tests, deploy/verify scripts
+  web3/           wallet connection, Hemi Testnet config, privacy helpers
+contracts/        NightShiftEntry (Solidity, Hardhat): the former entry-fee contract, no longer used by the game
 tools/            gen-layout.mjs, tts.ps1, smoke-test.mjs
 ```
 
@@ -97,23 +97,21 @@ None of this code ships in `npm run build`.
 
 ## Wallet & Safety
 
-NIGHT SHIFT uses an EVM wallet on **Hemi Testnet only** (chain ID 743111). Testnet ETH has no real-world value.
+**NIGHT SHIFT is free to play.** You connect an EVM wallet on **Hemi Testnet** (chain ID 743111), but the game
+never sends a transaction and nothing costs anything - you don't even need testnet ETH.
 Supported: browser extensions such as MetaMask, Rabby, Trust Wallet and Coinbase Wallet (plus any other
 EIP-6963 wallet), and WalletConnect mobile wallets when the build has a WalletConnect project ID.
 
 | Action | Wallet on Hemi Testnet | Cost |
 |---|---|---|
-| Single player NEW GAME | required | one small testnet ETH transaction (0.001 ETH + gas) |
+| Single player NEW GAME | required | free, no transaction |
 | Single player CONTINUE | required | free, no transaction |
-| Multiplayer CREATE PARTY | required | the creator pays once (0.001 ETH + gas) for the whole party |
+| Multiplayer CREATE PARTY | required | free, no transaction |
 | Multiplayer JOIN PARTY | required | free, no transaction |
 
 - **The game will never ask for your seed phrase, recovery phrase or private key.** Anyone who does is not us.
-- Your wallet is only ever asked to: connect, switch to (or add) Hemi Testnet, and confirm the entry transaction
-  above. The game does **not** request token approvals, NFT permissions, or message signatures.
-- An entry that was paid but not used (for example, the lobby closed before the night started) is reused for up
-  to 12 hours rather than charged again.
-- Use a testnet-only wallet. Get Hemi Testnet ETH from the official Hemi faucet.
+- Your wallet is only ever asked to connect and to switch to (or add) Hemi Testnet. The game does **not** request
+  transactions, token approvals, NFT permissions, or message signatures.
 
 **Network details**
 
@@ -122,27 +120,20 @@ EIP-6963 wallet), and WalletConnect mobile wallets when the build has a WalletCo
 | Network | Hemi Testnet (Hemi Sepolia), chain ID 743111, currency ETH |
 | RPC | `https://testnet.rpc.hemi.network/rpc` |
 | Explorer | https://testnet.explorer.hemi.xyz |
-| Entry contract | [`0x44BB53fcFD7a99c360A8b6a74DAdAd1879b1FA95`](https://testnet.explorer.hemi.xyz/address/0x44BB53fcFD7a99c360A8b6a74DAdAd1879b1FA95) (`NightShiftEntry`, source in [`contracts/`](contracts/)) |
 
-The game reads the fee from the contract and keeps all chain settings in `src/web3/chain.js` and
-`src/web3/deployments.json`. It needs no `.env`; two optional, public build-time variables exist:
-`VITE_HEMI_RPC_URL` (another Hemi RPC) and `VITE_WALLETCONNECT_PROJECT_ID` (enables WalletConnect).
-Contract development and deployment are documented in [`contracts/README.md`](contracts/README.md).
+All chain settings live in `src/web3/chain.js`. The game needs no `.env`; two optional, public build-time
+variables exist: `VITE_HEMI_RPC_URL` (another Hemi RPC) and `VITE_WALLETCONNECT_PROJECT_ID` (enables
+WalletConnect).
 
 ## Privacy
 
 - **No game server, no tracking.** NIGHT SHIFT has no backend of its own: no accounts, player database,
   leaderboard, analytics or telemetry.
 - **Your wallet address.** It is shown only to you (shortened) and is never sent to other players or to the
-  signalling server. It is kept in your browser's local storage (to remember your save and paid entries), and,
-  like any dApp, your wallet and the Hemi RPC (and WalletConnect's relay, if you use it) see it. Wallet errors in
-  the browser console are redacted.
-- **Payments are public.** Entry fees are ordinary blockchain transactions, so anyone can see on the block
-  explorer that your address paid the entry contract.
-- **Multiplayer parties.** To prove the party was paid for, joiners receive the party code, a party secret and a
-  block number - never an address or transaction hash - and check the creator's entry on Hemi with a free read.
-  Because that proof points to the payment on-chain, a party member who looks it up on the explorer can find the
-  creator's paying address. Creators should use a testnet-only wallet.
+  signalling server. It is kept in your browser's local storage (to tie your save to your wallet), and, like any
+  dApp, your wallet and the Hemi RPC (and WalletConnect's relay, if you use it) see it. Wallet errors in the
+  browser console are redacted.
+- **Nothing on-chain.** The game sends no transactions, so playing leaves no record on the blockchain.
 - **Multiplayer networking.** Multiplayer and voice chat use WebRTC (PeerJS). Players connect directly
   whenever their networks allow it; as in most peer-to-peer games, players in the same party can then learn each
   other's IP address. When a direct connection is impossible (for example on some mobile or strict networks),
